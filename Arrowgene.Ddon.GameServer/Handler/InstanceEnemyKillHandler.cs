@@ -30,17 +30,15 @@ namespace Arrowgene.Ddon.GameServer.Handler
         {
             CDataStageLayoutId layoutId = packet.Structure.LayoutId;
             StageId stageId = StageId.FromStageLayoutId(layoutId);
-            ushort subGroupId = 0;
+            ushort subGroupId = client.Party.InstanceEnemyManager.GetInstanceSubgroupId(stageId);
 
             Quest quest = null;
             bool IsQuestControlled = false;
             foreach (var questId in client.Party.QuestState.StageQuests(stageId))
             {
                 quest = QuestManager.GetQuest(questId);
-                var qSubGroupId = client.Party.QuestState.GetInstanceSubgroupId(quest, stageId);
-                if (client.Party.QuestState.HasEnemiesInCurrentStageGroup(quest, stageId, qSubGroupId))
+                if (client.Party.QuestState.HasEnemiesInCurrentStageGroup(quest, stageId, subGroupId))
                 {
-                    subGroupId = qSubGroupId;
                     IsQuestControlled = true;
                     break;
                 }
@@ -200,6 +198,11 @@ namespace Arrowgene.Ddon.GameServer.Handler
                     {
                         _gameServer.PPManager.AddPlayPoint(memberClient, gainedPP, 1);
                     }
+
+                    if (gainedExp > 0)
+                    {
+                        _gameServer.ExpManager.AddExp(memberClient, memberCharacter, gainedExp, RewardSource.Enemy);
+                    }
                 }
                 else if(member is PawnPartyMember)
                 {
@@ -213,15 +216,21 @@ namespace Arrowgene.Ddon.GameServer.Handler
                         // and non-rented pawns
                         continue;
                     }
+
+                    uint pawnExp = gainedExp;
+                    if (_gameServer.ExpManager.RequiresPawnCatchup(client.GameMode, client.Party, pawn))
+                    {
+                        pawnExp = _gameServer.ExpManager.GetAdjustedPawnExp(client.GameMode, RewardSource.Enemy, client.Party, pawn, enemyKilled.GetDroppedExperience(), enemyKilled.Lv);
+                    }
+
+                    if (pawnExp > 0)
+                    {
+                        _gameServer.ExpManager.AddExp(memberClient, memberCharacter, pawnExp, RewardSource.Enemy);
+                    }
                 }
                 else
                 {
                     throw new Exception("Unknown member type");
-                }
-
-                if (gainedExp > 0)
-                {
-                    _gameServer.ExpManager.AddExp(memberClient, memberCharacter, gainedExp, RewardSource.Enemy);
                 }
             }
         }
